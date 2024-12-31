@@ -129,10 +129,10 @@ class Game:
             self.display_surface.blit(crystal_image, (x_offset, y_offset))
             x_offset += crystal_image.get_width() + 5  # Add some spacing between crystals
 
-    def draw_hints(self, text, position, size):
+    def draw_hints(self, text, position, size, color = (255,255,255)):
         pygame.font.init()
         font = pygame.font.Font(pygame.font.get_default_font(), size)
-        text_surface = font.render(text, True, (255,255,255))
+        text_surface = font.render(text, True, color)
 
         world_x, world_y = position
 
@@ -144,8 +144,9 @@ class Game:
         self.display_surface.blit(text_surface, text_rect)
 
     def show_start_screen(self):
-        self.display_surface.fill((0, 0, 0))  # Black background
-        self.draw_hints('Press [SPACE] to Start', (WINDOW_WIDTH // 2 - 150, WINDOW_HEIGHT // 2), 30)
+        background = pygame.image.load(join('assets', 'background.png'))
+        self.display_surface.blit(background, (0, 0))  # Draw the background image
+        self.draw_hints('Press [SPACE] to Start', (WINDOW_WIDTH // 2 - 150, 200), 30, (0,0,0))
         pygame.display.flip()
 
         waiting = True
@@ -161,9 +162,10 @@ class Game:
     def show_end_screen(self, message):
         self.camera_x = 0  # Camera X position
         self.camera_y = 0
-        self.display_surface.fill((0, 0, 0))  # Black background
-        self.draw_hints(message, (WINDOW_WIDTH // 2 - 150, WINDOW_HEIGHT // 2), 30)
-        self.draw_hints('Press [R] to Restart or [ESC] to Quit', (WINDOW_WIDTH // 2 - 200, WINDOW_HEIGHT // 2 + 50), 20)
+        background = pygame.image.load(join('assets', 'background.png'))
+        self.display_surface.blit(background, (0, 0))  # Black background
+        self.draw_hints(message, (WINDOW_WIDTH // 2 - 100, 200), 30, (0,0,0))
+        self.draw_hints('Press [R] to Restart or [ESC] to Quit', (WINDOW_WIDTH // 2 - 200, 240), 20, (0,0,0))
         pygame.display.flip()
 
         waiting = True
@@ -222,16 +224,16 @@ class Game:
             self.draw_hints('Drink potion to heal', (510, 950), 20)
 
             if self.player.health <= 0 and self.status == 'init':
-                self.game_over_time = pygame.time.get_ticks()
-                print(self.game_over_time)
+                if self.game_over_time is None:
+                    self.game_over_time = time()
+                elif time() - self.game_over_time > 3:
+                    self.status = 'Game Over!'
+                    pygame.mixer.music.stop()
+                    break
+                print(time() - self.game_over_time)
 
             if self.player.rect.y <= 48 and (1200 <= self.player.rect.x <= 1900):
                 self.status = 'You Won!'
-                pygame.mixer.music.stop()
-                break
-
-            if self.game_over_time is not None and self.game_over_time > 7000:
-                self.status = 'Game Over!'
                 pygame.mixer.music.stop()
                 break
 

@@ -16,8 +16,9 @@ class BridgeItem(pygame.sprite.Sprite):
             (0, 225, 0),
         ]
         self.color = self.colors[index]  # No color initially
-        self.image = pygame.Surface(self.rect.size)  # Transparent surface
-        self.image.fill(self.color)
+        # self.image = pygame.Surface(self.rect.size)  # Transparent surface
+        # self.image.fill(self.color)
+        self.image = pygame.image.load(join('assets', 'bridge', str(self.index) + 'item.png')).convert_alpha()
         self.last_update_time = 0
 
     def remove(self):
