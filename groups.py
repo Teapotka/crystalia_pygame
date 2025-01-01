@@ -1,8 +1,4 @@
-from bridgeitem import BridgeItem
 from config import *
-from enemy import Enemy
-from sprites import CollisionSprite
-
 
 class AllSprites(pygame.sprite.Group):
     def __init__(self):
@@ -20,8 +16,3 @@ class AllSprites(pygame.sprite.Group):
         for layer in [ground_sprites, object_sprites]:
             for sprite in sorted(layer, key=lambda sprite: sprite.rect.centery):
                 self.display_surface.blit(sprite.image, sprite.rect.topleft + self.offset)
-
-                # Pridanie červeného rámu okolo každého spriteu
-                # if isinstance(sprite, CollisionSprite):
-                #     rect_with_offset = sprite.rect.move(self.offset.x, self.offset.y)
-                #     pygame.draw.rect(self.display_surface, (255, 0, 0), rect_with_offset, 1)

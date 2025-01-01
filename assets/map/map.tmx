@@ -207,11 +207,11 @@
   <object id="102" x="2368" y="2752" width="64" height="64"/>
  </objectgroup>
  <objectgroup id="7" name="bridge">
-  <object id="365" x="1600" y="128" width="192" height="64"/>
-  <object id="366" x="1600" y="192" width="192" height="64"/>
-  <object id="367" x="1600" y="256" width="192" height="64"/>
-  <object id="368" x="1600" y="320" width="192" height="64"/>
-  <object id="369" x="1600" y="384" width="192" height="64"/>
+  <object id="365" type="0" x="1600" y="128" width="192" height="64"/>
+  <object id="366" type="1" x="1600" y="192" width="192" height="64"/>
+  <object id="367" type="2" x="1600" y="256" width="192" height="64"/>
+  <object id="368" type="3" x="1600" y="320" width="192" height="64"/>
+  <object id="369" type="4" x="1600" y="384" width="192" height="64"/>
  </objectgroup>
  <objectgroup id="5" name="objects">
   <object id="110" gid="86" x="1049" y="400" width="128" height="128"/>
@@ -411,19 +411,19 @@
   <object id="317" name="Warlock" x="2818" y="2634">
    <point/>
   </object>
-  <object id="320" name="Crystal" x="444" y="921.333">
+  <object id="320" name="Crystal" type="0" x="444" y="921.333">
    <point/>
   </object>
-  <object id="351" name="Crystal" x="3007" y="2769">
+  <object id="351" name="Crystal" type="1" x="3007" y="2769">
    <point/>
   </object>
-  <object id="353" name="Crystal" x="259" y="2478">
+  <object id="353" name="Crystal" type="2" x="259" y="2478">
    <point/>
   </object>
-  <object id="355" name="Crystal" x="1816" y="1452">
+  <object id="355" name="Crystal" type="3" x="1816" y="1452">
    <point/>
   </object>
-  <object id="356" name="Crystal" x="2840" y="422">
+  <object id="356" name="Crystal" type="4" x="2840" y="422">
    <point/>
   </object>
   <object id="357" name="Potion" x="624" y="1018">

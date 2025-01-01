@@ -1,209 +1,194 @@
-from gc import enable
-from turtledemo.clock import setup
-
 import pygame.sprite
 from pygame.transform import scale
 from time import time
-
 from config import *
 
 class Hero(pygame.sprite.Sprite):
     def __init__(self, position, groups, collision_sprites, enemies, bridge):
-        super().__init__(groups)  # Pridanie hráča do skupiny spriteov
-        self.frames = {'left': [], 'right': [], 'idle': [], 'attack': [], 'death': []}  # Animácie pre každý smer
-        self.load_images()  # Načítanie animácií z disku
-        self.state = 'idle' # Počiatočný smer
-        self.frame_index = 0  # index animácie
-        self.image = pygame.image.load(join('assets', 'hero', self.state, '0.png')).convert_alpha()  # Počiatočný obrázok hráča
-        self.image = pygame.transform.scale(self.image, (self.image.get_width()*2, self.image.get_height()*2))
-        self.rect = self.image.get_rect(center=position)  # Obdĺžnik pre kolízie a pozíciu hráča
-        self.direction = pygame.Vector2()  # Smer pohybu (vektor)
-        self.speed = 500  # Rýchlosť hráča
-        self.collision_sprites = collision_sprites  # Objekty na detekciu kolízií
+        super().__init__(groups)
+        # Initial attributes
+        self.load_images()
+        self.enemy_type = 'hero'
+        self.state = 'idle'
+        self.frame_index = 0
+        self.image = self.frames['idle'][0]
+        self.rect = self.image.get_rect(center=position)
+        self.direction = pygame.Vector2()
+        self.speed = 500
+        self.health = self.max_health = 300
+        self.damage = 10
+
+        # Flags
+        self.is_attacking = False
+        self.damage_applied = False
+        self.is_mirrored = False
+        self.is_dead = False
+        self.death_played = False
+        self.attack_playing = False
+        self.last_attack_time \
+            = self.last_heal_time \
+            = self.last_remove_time = 0
+
+        # Groups
+        self.collision_sprites = collision_sprites
         self.enemies = enemies
         self.bridge = bridge
         self.collected_crystals = []
-        self.is_attacking = False  # Attack state flag
-        self.attack_timer = 0  # Timer to track attack animation
-        self.last_attack_time = 0
-        self.last_heal_time = 0
-        self.last_remove_time = 0
-        self.damage_applied = False
-        self.is_mirrored = False
-        self.health = 300  # Initialize health to 100
-        self.max_health = 300
-        self.damage = 10   # Hero's damage
-        self.is_dead = False  # Flag to track if the hero is dead
-        self.death_played = False
-        self.walk_sound = pygame.mixer.Sound(join('assets', 'audio', 'hero', 'walk.mp3'))  # Load walking sound
-        self.walk_sound.set_volume(0.5)
-        self.last_walk_play = 0
-        self.attack_sound = pygame.mixer.Sound(join('assets', 'audio', 'hero', 'attack.wav'))  # Load walking sound
-        self.attack_sound.set_volume(0.5)
-        self.last_attack_play = False
-        self.dying_sound = pygame.mixer.Sound(join('assets', 'audio', 'hero', 'death.wav'))  # Load walking sound
-        self.dying_sound.set_volume(0.5)
-        self.last_death_play = 0
-        self.bridge_sound = pygame.mixer.Sound(join('assets', 'audio', 'items', 'bridge.wav'))
-        self.bridge_sound.set_volume(0.5)
+
+        self.load_sounds()
 
     def load_images(self):
-        # Načítanie animácií pre všetky smery
+        self.frames = {'left': [], 'right': [], 'idle': [], 'attack': [], 'death': []}
         for state in self.frames.keys():
             for folder_path, sub_folders, file_names in walk(join('assets', 'hero', state)):
                 if file_names:
                     for file_name in sorted(file_names, key=lambda name: int(name.split('.')[0])):
-                        full_path = join(folder_path, file_name)  # Cesta k obrázku
-                        surface = pygame.image.load(full_path).convert_alpha()  # Načítanie obrázku
+                        full_path = join(folder_path, file_name)
+                        surface = pygame.image.load(full_path).convert_alpha()
                         surface = pygame.transform.scale(surface, (surface.get_width() * 2, surface.get_height()*2))
-                        self.frames[state].append(surface)  # Uloženie do slovníka animácií
+                        self.frames[state].append(surface)
+
+    def load_sounds(self):
+        self.walk_sound = self.load_sound('hero', 'walk.mp3')
+        self.attack_sound = self.load_sound('hero', 'attack.wav')
+        self.dying_sound = self.load_sound('hero', 'death.wav')
+        self.bridge_sound = self.load_sound('items', 'bridge.wav')
+
+    def load_sound(self, folder, file):
+        sound = pygame.mixer.Sound(join('assets', 'audio', folder, file))
+        sound.set_volume(0.5)
+        return sound
+
+    def handle_movement_animation(self, delta):
+        if not self.is_attacking:
+            self.attack_sound.stop()
+            if self.direction.magnitude() == 0:
+                self.walk_sound.stop()
+            elif not self.walk_sound.get_num_channels() :
+                self.walk_sound.play()
+
+        if self.is_attacking:
+            self.state = 'attack'
+        elif self.direction.magnitude() == 0:
+            self.state = 'idle'
+        else:
+            if self.direction.x != 0:
+                self.state = 'right' if self.direction.x > 0 else 'left'
+            if self.direction.y != 0:
+                if self.direction.x == 0:
+                    self.state = 'left' if self.direction.y > 0 else 'right'
+                else:
+                    self.state = 'right' if self.direction.x > 0 else 'left'
+
+        if self.is_attacking:
+            self.animate_attack(delta)
+        else:
+            self.frame_index = (self.frame_index + 10 * delta) % len(self.frames[self.state])
+
+        self.update_image()
+
+    def animate_attack(self, delta):
+        if not self.attack_sound.get_num_channels():
+            self.attack_sound.play()
+        self.frame_index += 15 * delta
+        if self.frame_index >= len(self.frames['attack']):
+            self.is_attacking = False
+            self.attack_playing = False
+            self.is_mirrored = False
+            self.frame_index = 0
+            self.attack_sound.stop()
+
+    def handle_death_animation(self, delta):
+        if self.dying_sound.get_num_channels() == 0:
+            self.dying_sound.play()
+        self.frame_index += 10 * delta
+        if self.frame_index >= len(self.frames['death']):
+            self.frame_index = 9
+            self.death_played = True
+
+        self.update_image()
+
+    def update_image(self):
+        self.image = self.frames[self.state][int(self.frame_index)]
+        self.image = pygame.transform.flip(self.image, self.is_mirrored, False)
 
     def animate(self, delta):
-        if not self.is_dead:
-            if self.is_attacking:
-                self.walk_sound.stop()
-                if not self.last_attack_play:
-                    self.last_attack_play = True
-                    self.attack_sound.play(1)
-                self.frame_index += 15 * delta
-                if self.state == 'attack':
-                    if self.frame_index >= len(self.frames['attack']):
-                        self.is_attacking = False  # Reset attack after animation
-                        self.frame_index = 0
-                        self.attack_sound.stop()
-                        self.last_attack_play = False
-                        self.is_mirrored = False
-                        self.state = 'idle' if self.direction.magnitude() == 0 else self.state
-            else:
-                if self.direction.magnitude() == 0:
-                    self.state = 'idle'
-                    self.walk_sound.stop()
-                else:
-                    if not pygame.mixer.get_busy():
-                        self.walk_sound.play()
-                # Nastavenie animácie na základe pohybu
-                if self.direction.x != 0:
-                    self.state = 'right' if self.direction.x > 0 else 'left'
-                if self.direction.y != 0:
-                    if self.direction.x == 0:
-                        self.state = 'left' if self.direction.y > 0 else 'right'
-                    else:
-                        self.state = 'right' if self.direction.x > 0 else 'left'
-
-                # Aktualizácia indexu animácie
-                self.frame_index += 10 * delta
-
-                if self.state == 'idle':
-                    self.frame_index = (self.frame_index + 5 * delta) % len(self.frames['idle'])  # Slow idle animation
-                else:
-                    self.frame_index %= len(self.frames[self.state])
+        if self.is_dead:
+            self.state = 'death'
+            if not self.death_played:
+                self.handle_death_animation(delta)
         else:
-            if self.state == 'death' and not self.death_played:
-                self.walk_sound.stop()
-                self.attack_sound.stop()
-                if time() - self.last_death_play > 1:
-                    self.last_death_play = time()
-                    self.dying_sound.play()
-                self.frame_index += 10 * delta
+            self.handle_movement_animation(delta)
 
-                if self.frame_index >= len(self.frames['death']):
-                    self.frame_index = 9
-                    print('Hey')
-                    self.death_played = True
-
-                self.frame_index %= len(self.frames[self.state])
-
-        self.image = self.frames[self.state][int(self.frame_index)]
-        if self.is_mirrored:
-            self.image = pygame.transform.flip(self.image, True, False)
-
+    # Collision with trees, stones, borders, enemies and bridge
     def collision(self, direction):
-        # Riešenie kolízií s objektmi
         collision_rect = pygame.Rect(self.rect.centerx - 40, self.rect.centery - 40, 80, 80)
+        self.handle_bridge_collision(collision_rect, direction)
+        self.handle_enemy_collision(collision_rect, direction)
+        self.handle_sprite_collision(collision_rect, direction)
+        self.rect.center = collision_rect.center
 
+    def handle_bridge_collision(self, collision_rect, direction):
         for item in self.bridge:
-            if collision_rect.colliderect(item.rect):  # Detect collision with adjusted size
-                if direction == 'horizontal':  # Horizontal collision
-                    if self.direction.x > 0:  # Moving right
-                        if collision_rect.right > item.rect.left:
-                            collision_rect.right = item.rect.left
-                    if self.direction.x < 0:  # Moving left
-                        if collision_rect.left < item.rect.right:
-                            collision_rect.left = item.rect.right
+            self.resolve_collision(collision_rect, item.rect, direction)
 
-                if direction == 'vertical':  # Vertical collision
-                    if self.direction.y > 0:  # Moving down
-                        if collision_rect.bottom > item.rect.top:
-                            collision_rect.bottom = item.rect.top
-                    if self.direction.y < 0:  # Moving up
-                        if collision_rect.top < item.rect.bottom:
-                            collision_rect.top = item.rect.bottom
-
+    def handle_enemy_collision(self, collision_rect, direction):
+        # Enemy collision areas
+        enemy_rects = ({
+            'inquisitor': pygame.Rect(529, 650, 130, 100),
+            'incubus': pygame.Rect(153, 2305, 220, 200),
+            'warlock': pygame.Rect(2743, 2509, 250, 200)
+                        })
         for enemy in self.enemies:
-            enemy_rect = pygame.Rect(enemy.rect.x + 290, enemy.rect.y + 50, enemy.rect.width, enemy.rect.height - 50) if enemy.enemy_type == 'warlock' else pygame.Rect(enemy.rect.x, enemy.rect.y + 50, enemy.rect.width, enemy.rect.height - 50)
-            if collision_rect.colliderect(enemy_rect):
-                if direction == 'horizontal':  # Horizontal collision
-                    if self.direction.x > 0:  # Moving right
-                        if collision_rect.right > enemy_rect.left:
-                            collision_rect.right = enemy_rect.left
-                    if self.direction.x < 0:  # Moving left
-                        if collision_rect.left < enemy_rect.right:
-                            collision_rect.left = enemy_rect.right
+            enemy_rect = enemy_rects[enemy.enemy_type]
+            self.resolve_collision(collision_rect, enemy_rect, direction)
 
-                if direction == 'vertical':  # Vertical collision
-                    if self.direction.y > 0:  # Moving down
-                        if collision_rect.bottom > enemy_rect.top:
-                            collision_rect.bottom = enemy_rect.top
-                    if self.direction.y < 0:  # Moving up
-                        if collision_rect.top < enemy_rect.bottom:
-                            collision_rect.top = enemy_rect.bottom
-
+    def handle_sprite_collision(self, collision_rect, direction):
         for sprite in self.collision_sprites:
-            if collision_rect.colliderect(sprite.rect):  # Detect collision with adjusted size
-                if direction == 'horizontal':  # Horizontal collision
-                    if self.direction.x > 0:  # Moving right
-                        if collision_rect.right > sprite.rect.left:
-                            collision_rect.right = sprite.rect.left
-                    if self.direction.x < 0:  # Moving left
-                        if collision_rect.left < sprite.rect.right:
-                            collision_rect.left = sprite.rect.right
+            self.resolve_collision(collision_rect, sprite.rect, direction)
 
-                if direction == 'vertical':  # Vertical collision
-                    if self.direction.y > 0:  # Moving down
-                        if collision_rect.bottom > sprite.rect.top:
-                            collision_rect.bottom = sprite.rect.top
-                    if self.direction.y < 0:  # Moving up
-                        if collision_rect.top < sprite.rect.bottom:
-                            collision_rect.top = sprite.rect.bottom
-
-        self.rect.centerx = collision_rect.centerx
-        self.rect.centery = collision_rect.centery
+    def resolve_collision(self, collider, target, direction):
+        if collider.colliderect(target):
+            if direction == 'horizontal':
+                if self.direction.x > 0:
+                    collider.right = min(collider.right, target.left)
+                else:
+                    collider.left = max(collider.left, target.right)
+            elif direction == 'vertical':
+                if self.direction.y > 0:
+                    collider.bottom = min(collider.bottom, target.top)
+                else:
+                    collider.top = max(collider.top, target.bottom)
 
     def attack_check(self):
+        # Attack reachable area
         collision_rect = pygame.Rect(self.rect.centerx - 40, self.rect.centery - 40, 80, 80)
+        enemy_rects = ({
+            'inquisitor': pygame.Rect(529, 670, 180, 100),
+            'incubus': pygame.Rect(153, 2205, 250, 200),
+            'warlock': pygame.Rect(2663, 2509, 250, 200)
+        })
         for enemy in self.enemies:
-            enemy_rect = pygame.Rect(enemy.rect.x, enemy.rect.y - 50, enemy.rect.width + 100, enemy.rect.height + 100)
+            enemy_rect = enemy_rects[enemy.enemy_type]
             if collision_rect.colliderect(enemy_rect):
                 if time() - self.last_attack_time > 0.5:
                     self.last_attack_time = time()
                     enemy.take_damage(self.damage)
 
     def move(self, delta):
-        # Pohyb hráča s detekciou kolízií
         if not self.is_attacking and not self.is_dead:
-            self.rect.x += self.direction.x * self.speed * delta  # Pohyb horizontálne
-            self.collision("horizontal")  # Kontrola kolízií horizontálne
-            self.rect.y += self.direction.y * self.speed * delta  # Pohyb vertikálne
-            self.collision("vertical")  # Kontrola kolízií vertikálne
+            self.rect.x += self.direction.x * self.speed * delta
+            self.collision("horizontal")
+            self.rect.y += self.direction.y * self.speed * delta
+            self.collision("vertical")
 
+    # Drinking potion effect
     def heal(self):
         if time() - self.last_heal_time > 1:
-            if self.health + 25 <= 300:
-                self.health += 25
-            else:
-                self.health = 300
+            self.health = min(self.health + 25, self.max_health)
             self.last_heal_time = time()
 
+    # Removes crystals only on magic ground
     def remove_crystal(self):
         if(
             not ((1574 <= self.rect.x <= 1638) and
@@ -213,10 +198,8 @@ class Hero(pygame.sprite.Sprite):
 
         if time() - self.last_remove_time > 0.5:
             self.last_remove_time = time()
-            if len(self.collected_crystals):
-                print(self.collected_crystals, self.bridge)
+            if self.collected_crystals:
                 crystal = self.collected_crystals.pop()
-                print(crystal.index)
                 for item in self.bridge:
                     if item.index == crystal.index:
                         item.remove()
@@ -226,22 +209,28 @@ class Hero(pygame.sprite.Sprite):
     def input(self):
         if self.is_dead:
             return
-        # Spracovanie vstupu od používateľa
+
+        # Block of input while attack
+        if self.attack_playing:
+            return
+
         keys = pygame.key.get_pressed()
         if not self.is_attacking:
             self.direction.x = int(keys[pygame.K_RIGHT]) - int(keys[pygame.K_LEFT])
             self.direction.y = int(keys[pygame.K_DOWN]) - int(keys[pygame.K_UP])
             self.direction = self.direction.normalize() if self.direction else self.direction
 
-        if keys[pygame.K_e]:  # Trigger attack
+        if keys[pygame.K_e]:
             self.is_attacking = True
+            self.attack_playing = True
             self.frame_index = 0
             self.state = 'attack'
             self.is_mirrored = False
             self.attack_check()
 
-        if keys[pygame.K_q]:  # Trigger attack left
+        if keys[pygame.K_q]:
             self.is_attacking = True
+            self.attack_playing = True
             self.frame_index = 0
             self.state = 'attack'
             self.is_mirrored = True
@@ -250,13 +239,10 @@ class Hero(pygame.sprite.Sprite):
         if keys[pygame.K_w]:
             self.remove_crystal()
 
-
-
     def take_damage(self, amount):
         if self.health <= 0:
             return
         self.health -= amount
-        print('Hero health', self.health)
         if self.health <= 0:
             self.die()
 
@@ -267,7 +253,6 @@ class Hero(pygame.sprite.Sprite):
             self.frame_index = 0
 
     def update(self, delta):
-        # Hlavná aktualizácia hráča (vstup, pohyb, animácia)
         if not self.is_dead:
             self.input()
             self.move(delta)
